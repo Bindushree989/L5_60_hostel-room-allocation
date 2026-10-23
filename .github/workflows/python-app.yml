@@ -33,23 +33,25 @@ jobs:
           python hostel_allocation.py
 
       - name: Run Pylint
-        continue-on-error: true
+        if: always()
         run: |
           mkdir -p reports
           python -m pylint hostel_allocation.py \
-            > reports/pylint_report_after.txt 2>&1
+            > reports/pylint_report_after.txt 2>&1 || true
 
       - name: Run Bandit
-        continue-on-error: true
+        if: always()
         run: |
+          mkdir -p reports
           python -m bandit -r hostel_allocation.py \
-            > reports/bandit_report_after.txt 2>&1
+            > reports/bandit_report_after.txt 2>&1 || true
 
       - name: Run Flake8
-        continue-on-error: true
+        if: always()
         run: |
+          mkdir -p reports
           python -m flake8 hostel_allocation.py \
-            > reports/flake8_report_after.txt 2>&1
+            > reports/flake8_report_after.txt 2>&1 || true
 
       - name: Upload reports
         if: always()
@@ -57,3 +59,4 @@ jobs:
         with:
           name: hostel-static-analysis-reports
           path: reports/
+          if-no-files-found: warn
