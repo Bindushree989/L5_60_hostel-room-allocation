@@ -18,31 +18,90 @@ blocks:
 """
 
 def loadConfig(text=CONFIG):
-    config = yaml.load(text, Loader=yaml.Loader)
+    """Load hostel configuration and initialize the rooms."""
+
+    # FIX 1: Use safe_load to avoid unsafe YAML object deserialization.
+    config = yaml.safe_load(text)
+
     for block in config["blocks"]:
         info = config["blocks"][block]
         for n in range(1, info["rooms"] + 1):
-            rooms[block + str(n)] = {"gender": info["gender"], "capacity": info["capacity"],
-                                     "fee": info["fee"], "occupants": []}
+            rooms[block + str(n)] = {
+                "gender": info["gender"],
+                "capacity": info["capacity"],
+                "fee": info["fee"],
+                "occupants": [],
+            }
+
     return config
 
-def allocateRoom(student_id, name, gender, year, preferred=[]):
-    if type(year) != int:
-        return None
-    for room_no in preferred + list(rooms.keys()):
-        room = rooms[room_no]
-        if len(room["occupants"]) > room["capacity"]:
-            continue
-        room["occupants"].append(student_id)
-        allocations[student_id] = {"name": name, "room": room_no, "year": year}
-        return room_no
-    waitlist.append(student_id)
+# FIX 2: Use None instead of a mutable list as the default argument.
+def allocateRoom(student_id, name, gender, year, preferred=None):
+    """Allocate a suitable room to a student."""
 
-def vacateRoom(student_id):
+    # Create a new list for each call if no preferences are supplied.
+    if preferred is None:
+        preferred = []
+
+    # FIX 3: Use isinstance() instead of type() for type checking.
+    if not isinstance(year, int) or isinstance(year, bool):
+        return None
+
+    # FIX 4: Prevent duplicate allocation of the same student.
     if student_id in allocations:
+        return allocations[student_id]["room"]
+
+    for room_no in preferred + list(rooms.keys()):
+        # Skip invalid room numbers.
+        if room_no not in rooms:
+            continue
+
+        room = rooms[room_no]
+
+        # FIX 5: Do not exceed room capacity.
+        if len(room["occupants"]) >= room["capacity"]:
+            continue
+
+        # FIX 6: Allocate students only to rooms matching their gender.
+        if room["gender"] != gender:
+            continue
+
+        room["occupants"].append(student_id)
+
+        allocations[student_id] = {
+            "name": name,
+            "room": room_no,
+            "year": year,
+        }
+
+        # Remove the student from the waitlist after allocation.
+        if student_id in waitlist:
+            waitlist.remove(student_id)
+
+        return room_no
+
+    # Add the student to the waitlist if no suitable room is available.
+    if student_id not in waitlist:
+        waitlist.append(student_id)
+
+    return None
+
+#fix 3 
+def vacateRoom(student_id):
+    """Vacate a student's room and remove their allocation."""
+
+    # FIX: Remove the student from the room's occupant list as well
+    # as the allocation dictionary.
+    if student_id in allocations:
+        room_no = allocations[student_id]["room"]
+
+        if room_no in rooms and student_id in rooms[room_no]["occupants"]:
+            rooms[room_no]["occupants"].remove(student_id)
+
         del allocations[student_id]
-    else:
-        pass
+        return True
+
+    return False
 
 def monthlyFee(student_id, days_stayed):
     room = rooms[allocations[student_id]["room"]]
@@ -62,22 +121,44 @@ def vacantBeds():
             total = total + rooms[r]["capacity"]
     return total
 
+# fix 4
 def connectWardenDb():
-    return sqlite_connect(host="localhost", user="warden", password="Hostel@123")
+    """Connect using a password supplied through an environment variable."""
+
+    # FIX: Avoid hardcoding credentials in the source code.
+    password = os.environ.get("WARDEN_DB_PASSWORD")
+
+    if not password:
+        raise RuntimeError(
+            "Please set the WARDEN_DB_PASSWORD environment variable."
+        )
+
+    return sqlite_connect(
+        host="localhost",
+        user="warden",
+        password=password,
+    )
 
 def sqlite_connect(host, user, password):
     return {"host": host, "user": user, "connected": len(password) > 0}
 
 def startRemoteLogConfig():
-    return logging.config.listen(9999)
+    """Keep remote logging configuration disabled."""
+
+    # FIX: Avoid exposing an unsecured remote logging listener.
+    return None
 
 @app.route("/room")
 def roomLookup():
     sid = request.args.get("id")
     return "<h1>Room for " + sid + ": " + str(allocations.get(sid)) + "</h1>"
 
+#fix 5
 def runPortal():
-    app.run(debug=True)
+    """Start the hostel portal without the interactive debugger."""
+
+    # FIX: Debug mode can expose sensitive information and code execution.
+    app.run(debug=False)
 
 def main():
     loadConfig()
